@@ -54,12 +54,6 @@
     </select>
     <button type="submit">Filter</button>
   </form>
-
-  <!-- Quick-add ticket (posts to DRF API) -->
-  <form class="inline" id="add-form" onsubmit="return addTicket(event)">
-    <input required name="title" placeholder="New ticket title">
-    <button type="submit">Add</button>
-  </form>
 </header>
 
 <p class="muted">Auto-refreshes every 15s. <span id="last"></span></p>
@@ -105,47 +99,35 @@
 <script>
 const API = "/api/tickets/";
 
-// add ticket via API (unchanged)
-async function addTicket(e){
-  e.preventDefault();
-  const form = document.getElementById("add-form");
-  const title = form.title.value.trim();
-  if(!title) return false;
-  await fetch(API, {
-    method:"POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ title, description:"", status:"open", priority:"medium", category:"", is_duplicate:false })
-  });
-  form.reset();
-  await reload();
-  return false;
-}
-
 function normalize(v){ return (v ?? "").toString().trim().toLowerCase(); }
 
 function priorityClassAndLabel(p){
   const pv = normalize(p);
-  // support both numeric and text priorities
-  if (pv === "1" || pv === "high")    return ["priority-high", "HIGH"];
+  if (pv === "1" || pv === "high") return ["priority-high", "HIGH"];
   if (pv === "2" || pv === "medium") return ["priority-medium", "MEDIUM"];
-  if (pv === "3" || pv === "low")   return ["priority-low", "LOW"];
+  if (pv === "3" || pv === "low") return ["priority-low", "LOW"];
   return ["", (p ?? "").toString().toUpperCase()];
 }
 
 async function reload(){
-  const res = await fetch(API + "?ordering=-created_at");
+  // reuse whatever filters are in the URL bar
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("ordering")) params.set("ordering", "-created_at");
+
+  const res = await fetch(API + "?" + params.toString());
   const data = await res.json();
   const arr = Array.isArray(data) ? data : (data.results || []);
   const tbody = document.getElementById("tbody");
 
   tbody.innerHTML = arr.map(t => {
-    const s = normalize(t.status);                 // "open" | "closed" | etc
+    const s = normalize(t.status);
     const [pClass, pLabel] = priorityClassAndLabel(t.priority);
+    const statusClass = s === "open" ? "open" : (s === "closed" ? "closed" : "");
 
     return `
       <tr>
         <td>${t.title}</td>
-        <td><span class="pill ${s ? 'open' === s || 'closed' === s ? s : '' : ''}">${(t.status ?? '').toString().toUpperCase()}</span></td>
+        <td><span class="pill ${statusClass}">${(t.status ?? '').toString().toUpperCase()}</span></td>
         <td><span class="pill ${pClass}">${pLabel}</span></td>
         <td>${t.category || "—"}</td>
         <td>${t.is_duplicate ? "Yes" : "No"}</td>
@@ -157,10 +139,10 @@ async function reload(){
   document.getElementById("last").textContent = "Last updated " + new Date().toLocaleTimeString();
 }
 
-// first load + polling
 reload();
 setInterval(reload, 15000);
 </script>
+
 
 </body>
 </html>
