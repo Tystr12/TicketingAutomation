@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ticket Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+  body { font-family: system-ui, Arial; margin: 24px; }
+  header { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  input, select, button { padding:8px; }
+  table { width:100%; border-collapse: collapse; margin-top:16px; }
+  th, td { border-bottom:1px solid #eee; padding:8px; text-align:left; }
+  .muted { color:#666; font-size:12px; }
+  form.inline { display:flex; gap:8px; align-items:center; }
+  tr:hover { background:#fafafa; }
+
+  /* Base pill: give a safe default bg so text never “disappears” */
+  .pill {
+    padding:4px 10px; border-radius:999px; font-size:12px;
+    font-weight:600; letter-spacing:.5px; text-transform:uppercase;
+    color:#fff; background:#6b7280; display:inline-block; /* gray fallback */
+  }
+
+  /* Status colors (higher specificity so they always override) */
+  .pill.open   { background:#22c55e; }  /* green */
+  .pill.closed { background:#ef4444; }  /* red  */
+
+  /* Priority colors */
+  .pill.priority-low    { background:#3b82f6; }            /* blue   */
+  .pill.priority-medium { background:#facc15; color:#111; }/* yellow + dark text */
+  .pill.priority-high   { background:#f97316; }            /* orange */
+</style>
+
+
+</head>
+<body>
+
+<header>
+  <h2 style="margin-right:auto">Ticket Dashboard</h2>
+
+  <!-- Search/filter form (GET) -->
+  <form class="inline" method="get">
+    <input type="text" name="q" placeholder="Search title/desc/category" value="{{ q }}">
+    <select name="status">
+      <option value="">All status</option>
+      <option value="open" {% if status == 'open' %}selected{% endif %}>Open</option>
+      <option value="closed" {% if status == 'closed' %}selected{% endif %}>Closed</option>
+    </select>
+    <input type="text" name="category" placeholder="Category (Printer, Network...)" value="{{ category }}">
+    <select name="ordering">
+      <option value="-created_at" {% if ordering == '-created_at' %}selected{% endif %}>Newest</option>
+      <option value="created_at" {% if ordering == 'created_at' %}selected{% endif %}>Oldest</option>
+      <option value="priority" {% if ordering == 'priority' %}selected{% endif %}>Priority</option>
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  <!-- Quick-add ticket (posts to DRF API) -->
+  <form class="inline" id="add-form" onsubmit="return addTicket(event)">
+    <input required name="title" placeholder="New ticket title">
+    <button type="submit">Add</button>
+  </form>
+</header>
+
+<p class="muted">Auto-refreshes every 15s. <span id="last"></span></p>
+
+<table id="table">
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Status</th>
+      <th>Priority</th>
+      <th>Category</th>
+      <th>Duplicate</th>
+      <th>Created</th>
+    </tr>
+  </thead>
+  <tbody id="tbody">
+    {% for t in tickets %}
+    <tr>
+      <td>{{ t.title }}</td>
+      <td><span class="pill">{{ t.status }}</span></td>
+      <td>{{ t.priority }}</td>
+      <td>{{ t.category|default:"—" }}</td>
+      <td>{{ t.is_duplicate|yesno:"Yes,No" }}</td>
+      <td>{{ t.created_at|date:"Y-m-d H:i" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6">No tickets yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Simple pager -->
+<p>
+  {% if tickets.has_previous %}
+    <a href="?page={{ tickets.previous_page_number }}&q={{ q }}&status={{ status }}&category={{ category }}&ordering={{ ordering }}">Prev</a>
+  {% endif %}
+  Page {{ tickets.number }} of {{ tickets.paginator.num_pages }}
+  {% if tickets.has_next %}
+    <a href="?page={{ tickets.next_page_number }}&q={{ q }}&status={{ status }}&category={{ category }}&ordering={{ ordering }}">Next</a>
+  {% endif %}
+</p>
+
+<script>
+const API = "/api/tickets/";
+
+// add ticket via API (unchanged)
+async function addTicket(e){
+  e.preventDefault();
+  const form = document.getElementById("add-form");
+  const title = form.title.value.trim();
+  if(!title) return false;
+  await fetch(API, {
+    method:"POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ title, description:"", status:"open", priority:"medium", category:"", is_duplicate:false })
+  });
+  form.reset();
+  await reload();
+  return false;
+}
+
+function normalize(v){ return (v ?? "").toString().trim().toLowerCase(); }
+
+function priorityClassAndLabel(p){
+  const pv = normalize(p);
+  // support both numeric and text priorities
+  if (pv === "1" || pv === "high")    return ["priority-high", "HIGH"];
+  if (pv === "2" || pv === "medium") return ["priority-medium", "MEDIUM"];
+  if (pv === "3" || pv === "low")   return ["priority-low", "LOW"];
+  return ["", (p ?? "").toString().toUpperCase()];
+}
+
+async function reload(){
+  const res = await fetch(API + "?ordering=-created_at");
+  const data = await res.json();
+  const arr = Array.isArray(data) ? data : (data.results || []);
+  const tbody = document.getElementById("tbody");
+
+  tbody.innerHTML = arr.map(t => {
+    const s = normalize(t.status);                 // "open" | "closed" | etc
+    const [pClass, pLabel] = priorityClassAndLabel(t.priority);
+
+    return `
+      <tr>
+        <td>${t.title}</td>
+        <td><span class="pill ${s ? 'open' === s || 'closed' === s ? s : '' : ''}">${(t.status ?? '').toString().toUpperCase()}</span></td>
+        <td><span class="pill ${pClass}">${pLabel}</span></td>
+        <td>${t.category || "—"}</td>
+        <td>${t.is_duplicate ? "Yes" : "No"}</td>
+        <td>${t.created_at ? new Date(t.created_at).toLocaleString() : ""}</td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("last").textContent = "Last updated " + new Date().toLocaleTimeString();
+}
+
+// first load + polling
+reload();
+setInterval(reload, 15000);
+</script>
+
+</body>
+</html>
