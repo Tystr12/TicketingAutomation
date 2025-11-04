@@ -72,21 +72,40 @@
   <tbody id="tbody">
     {% for t in tickets %}
     <tr>
-      <td>{{ t.title }}</td>
-      <td><span class="pill">{{ t.status }}</span></td>
-      <td>{{ t.priority }}</td>
-      <td>{{ t.category|default:"—" }}</td>
-      <td>{{ t.is_duplicate|yesno:"Yes,No" }}</td>
-      <td>{{ t.created_at|date:"Y-m-d H:i" }}</td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="6">No tickets yet.</td></tr>
+  <td>{{ t.title }}</td>
+
+  <!-- Status pill -->
+  <td>
+    <span class="pill {{ t.status|lower }}">
+      {{ t.status|upper }}
+    </span>
+  </td>
+
+  <!-- Priority pill -->
+  <td>
+    <span class="pill
+      {% if t.priority == 1 %}priority-high
+      {% elif t.priority == 2 %}priority-medium
+      {% else %}priority-low
+      {% endif %}">
+      {% if t.priority == 1 %}HIGH
+      {% elif t.priority == 2 %}MEDIUM
+      {% else %}LOW
+      {% endif %}
+    </span>
+  </td>
+
+  <td>{{ t.category|default:"—" }}</td>
+  <td>{{ t.is_duplicate|yesno:"Yes,No" }}</td>
+  <td>{{ t.created_at|date:"Y-m-d H:i" }}</td>
+</tr>
+
     {% endfor %}
   </tbody>
 </table>
 
 <!-- Simple pager -->
-<p>
+<p id="pager">
   {% if tickets.has_previous %}
     <a href="?page={{ tickets.previous_page_number }}&q={{ q }}&status={{ status }}&category={{ category }}&ordering={{ ordering }}">Prev</a>
   {% endif %}
@@ -96,52 +115,38 @@
   {% endif %}
 </p>
 
+
+
 <script>
-const API = "/api/tickets/";
-
-function normalize(v){ return (v ?? "").toString().trim().toLowerCase(); }
-
-function priorityClassAndLabel(p){
-  const pv = normalize(p);
-  if (pv === "1" || pv === "high") return ["priority-high", "HIGH"];
-  if (pv === "2" || pv === "medium") return ["priority-medium", "MEDIUM"];
-  if (pv === "3" || pv === "low") return ["priority-low", "LOW"];
-  return ["", (p ?? "").toString().toUpperCase()];
+function stamp() {
+  const el = document.getElementById("last");
+  if (el) el.textContent = "Last updated " + new Date().toLocaleTimeString();
 }
 
-async function reload(){
-  // reuse whatever filters are in the URL bar
-  const params = new URLSearchParams(window.location.search);
-  if (!params.has("ordering")) params.set("ordering", "-created_at");
+async function refreshPartial() {
+  // Re-fetch the same paged URL (?page=..., filters, ordering preserved)
+  const res = await fetch(window.location.href, { headers: { "X-Requested-With": "fetch" } });
+  const html = await res.text();
+  const doc = new DOMParser().parseFromString(html, "text/html");
 
-  const res = await fetch(API + "?" + params.toString());
-  const data = await res.json();
-  const arr = Array.isArray(data) ? data : (data.results || []);
+  // Swap table body
+  const newTbody = doc.getElementById("tbody");
   const tbody = document.getElementById("tbody");
+  if (newTbody && tbody) tbody.innerHTML = newTbody.innerHTML;
 
-  tbody.innerHTML = arr.map(t => {
-    const s = normalize(t.status);
-    const [pClass, pLabel] = priorityClassAndLabel(t.priority);
-    const statusClass = s === "open" ? "open" : (s === "closed" ? "closed" : "");
+  // Swap pager
+  const newPager = doc.getElementById("pager");
+  const pager = document.getElementById("pager");
+  if (newPager && pager) pager.innerHTML = newPager.innerHTML;
 
-    return `
-      <tr>
-        <td>${t.title}</td>
-        <td><span class="pill ${statusClass}">${(t.status ?? '').toString().toUpperCase()}</span></td>
-        <td><span class="pill ${pClass}">${pLabel}</span></td>
-        <td>${t.category || "—"}</td>
-        <td>${t.is_duplicate ? "Yes" : "No"}</td>
-        <td>${t.created_at ? new Date(t.created_at).toLocaleString() : ""}</td>
-      </tr>
-    `;
-  }).join("");
-
-  document.getElementById("last").textContent = "Last updated " + new Date().toLocaleTimeString();
+  stamp();
 }
 
-reload();
-setInterval(reload, 15000);
+// Initial stamp + refresh every 15s
+stamp();
+setInterval(refreshPartial, 15000);
 </script>
+
 
 
 </body>
