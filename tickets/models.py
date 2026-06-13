@@ -97,6 +97,8 @@ class GameState(models.Model):
     replies_sent = models.IntegerField(default=0)
     user_replies_received = models.IntegerField(default=0)
 
+    simulation_running = models.BooleanField(default=False)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

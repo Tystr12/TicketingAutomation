@@ -202,6 +202,27 @@ tr.critical-row {
   <div><strong>Replies sent:</strong> {{ game_state.replies_sent }}</div>
   <div><strong>User replies:</strong> {{ game_state.user_replies_received }}</div>
   <div><strong>Tickets closed:</strong> {{ game_state.tickets_closed }}</div>
+  <form method="post" action="{% url 'toggle_simulation' %}">
+  {% csrf_token %}
+
+  {% if game_state.simulation_running %}
+    <button type="submit" style="background:#ef4444; color:white;">
+      Stop simulation
+    </button>
+  {% else %}
+    <button type="submit" style="background:#22c55e; color:white;">
+      Start simulation
+    </button>
+  {% endif %}
+</form>
+<div>
+  <strong>Simulation:</strong>
+  {% if game_state.simulation_running %}
+    Running
+  {% else %}
+    Stopped
+  {% endif %}
+</div>
 </section>
 
   <!-- Search/filter form (GET) -->

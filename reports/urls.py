@@ -10,4 +10,5 @@ urlpatterns = [
     path("process-incoming-tickets/", views.process_incoming_tickets, name="process_incoming_tickets"),
     path("ticket/<int:ticket_id>/note/", views.add_internal_note, name="add_internal_note"),
     path("ticket/<int:ticket_id>/note/", views.add_internal_note, name="add_internal_note"),
+    path("toggle-simulation/", views.toggle_simulation, name="toggle_simulation"),
 ]

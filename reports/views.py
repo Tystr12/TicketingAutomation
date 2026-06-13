@@ -55,6 +55,13 @@ def user_confirmed_fixed(ticket):
     return any(phrase in text for phrase in positive_phrases)
 
 def process_incoming_tickets(request):
+    game = GameState.get_state()
+
+    if not game.simulation_running:
+        return JsonResponse({
+            "created": False,
+            "simulation_running": False,
+        })
     created_ticket = None
 
     # 25% chance every time this endpoint is called
@@ -185,6 +192,14 @@ def create_random_ticket():
 
     return ticket
 
+@require_POST
+def toggle_simulation(request):
+    game = GameState.get_state()
+    game.simulation_running = not game.simulation_running
+    game.save()
+
+    return redirect("dashboard")
+
 def create_simulated_user_reply(ticket):
     possible_replies = [
         "I tried that, but the issue is still happening.",
@@ -228,6 +243,14 @@ def create_simulated_user_reply(ticket):
     )
 
 def process_simulated_replies(request):
+    game = GameState.get_state()
+
+    if not game.simulation_running:
+        return JsonResponse({
+            "created": False,
+            "simulation_running": False,
+        })
+    
     now = timezone.now()
 
     tickets_ready = Ticket.objects.filter(
