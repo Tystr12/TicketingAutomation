@@ -3,6 +3,10 @@ from django.db import models
 from django.db import models
 
 
+from django.db import models
+from django.utils import timezone
+
+
 class Ticket(models.Model):
     PRIORITY_CRITICAL = 0
     PRIORITY_HIGH = 1
@@ -19,12 +23,14 @@ class Ticket(models.Model):
     STATUS_OPEN = "open"
     STATUS_WAITING_USER = "waiting_user"
     STATUS_CLOSED = "closed"
+    STATUS_ESCALATED = "escalated"
 
     STATUS_CHOICES = [
-        (STATUS_OPEN, "Open"),
-        (STATUS_WAITING_USER, "Waiting user"),
-        (STATUS_CLOSED, "Closed"),
-    ]
+    (STATUS_OPEN, "Open"),
+    (STATUS_WAITING_USER, "Waiting user"),
+    (STATUS_CLOSED, "Closed"),
+    (STATUS_ESCALATED, "Escalated"),
+]
 
     title = models.CharField(max_length=400)
     description = models.TextField(blank=True)
@@ -45,6 +51,10 @@ class Ticket(models.Model):
     is_duplicate = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # New fields for automatic simulated user replies
+    user_reply_due_at = models.DateTimeField(blank=True, null=True)
+    is_waiting_for_simulated_reply = models.BooleanField(default=False)
+
     @property
     def ticket_number(self):
         return f"INC-{self.id:06d}"
@@ -62,6 +72,7 @@ class TicketEvent(models.Model):
         ("message_sent", "Message sent"),
         ("user_reply", "User reply"),
         ("note", "Internal note"),
+        ("score", "Score"),
     ]
 
     ticket = models.ForeignKey(
@@ -79,3 +90,20 @@ class TicketEvent(models.Model):
 
     def __str__(self):
         return f"{self.ticket.ticket_number} - {self.event_type}"
+    
+class GameState(models.Model):
+    score = models.IntegerField(default=0)
+    tickets_closed = models.IntegerField(default=0)
+    replies_sent = models.IntegerField(default=0)
+    user_replies_received = models.IntegerField(default=0)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get_state(cls):
+        state, _ = cls.objects.get_or_create(id=1)
+        return state
+
+    def add_points(self, amount):
+        self.score += amount
+        self.save()

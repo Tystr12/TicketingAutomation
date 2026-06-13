@@ -120,6 +120,75 @@ tr.critical-row {
 .pill.waiting_user {
   background: #a855f7;
 }
+.selected-row {
+  background: #eff6ff !important;
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.selected-row td:first-child {
+  border-left: 5px solid #2563eb;
+}
+.pill.escalated {
+  background: #6b7280;
+}
+.history-item {
+  border-left: 3px solid #2563eb;
+  padding-left: 10px;
+  margin-bottom: 12px;
+}
+
+.score-event {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  list-style-position: inside;
+  opacity: 0.9;
+}
+
+.score-positive {
+  border-left-color: #22c55e;
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.score-negative {
+  border-left-color: #ef4444;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+.history-item {
+  border-left: 3px solid #2563eb;
+  padding-left: 10px;
+  margin-bottom: 12px;
+}
+
+.score-event {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  list-style-position: inside;
+  opacity: 0.9;
+}
+
+.score-positive {
+  border-left-color: #22c55e;
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.score-negative {
+  border-left-color: #ef4444;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.internal-note-event {
+  border-left-color: #7c3aed;
+  background: #f5f3ff;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
 </style>
 
 
@@ -128,31 +197,48 @@ tr.critical-row {
 
 <header>
   <h2 style="margin-right:auto">Ticket Dashboard</h2>
+  <section style="display:flex; gap:16px; margin:16px 0; flex-wrap:wrap;">
+  <div><strong>Score:</strong> {{ game_state.score }}</div>
+  <div><strong>Replies sent:</strong> {{ game_state.replies_sent }}</div>
+  <div><strong>User replies:</strong> {{ game_state.user_replies_received }}</div>
+  <div><strong>Tickets closed:</strong> {{ game_state.tickets_closed }}</div>
+</section>
 
   <!-- Search/filter form (GET) -->
   <form class="inline" method="get">
     <input type="text" name="q" placeholder="Search title/desc/category" value="{{ q }}">
     <select name="status">
-      <option value="">All status</option>
-      <option value="open" {% if status == 'open' %}selected{% endif %}>Open</option>
-      <option value="waiting_user" {% if status == 'waiting_user' %}selected{% endif %}>Waiting user</option>
-      <option value="closed" {% if status == 'closed' %}selected{% endif %}>Closed</option>
-    </select>
+  <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+  <option value="open" {% if status == 'open' %}selected{% endif %}>Open</option>
+  <option value="waiting_user" {% if status == 'waiting_user' %}selected{% endif %}>Waiting user</option>
+  <option value="closed" {% if status == 'closed' %}selected{% endif %}>Closed</option>
+  <option value="all" {% if status == 'all' %}selected{% endif %}>All tickets</option>
+  <option value="escalated" {% if status == 'escalated' %}selected{% endif %}>Escalated</option>
+</select>
     <input type="text" name="category" placeholder="Category (Printer, Network...)" value="{{ category }}">
     <select name="ordering">
-      <option value="-created_at" {% if ordering == '-created_at' %}selected{% endif %}>Newest</option>
-      <option value="created_at" {% if ordering == 'created_at' %}selected{% endif %}>Oldest</option>
-      <option value="priority" {% if ordering == 'priority' %}selected{% endif %}>Priority</option>
-    </select>
+  <option value="-updated_at" {% if ordering == '-updated_at' %}selected{% endif %}>Newest activity</option>
+  <option value="-created_at" {% if ordering == '-created_at' %}selected{% endif %}>Newest created</option>
+  <option value="created_at" {% if ordering == 'created_at' %}selected{% endif %}>Oldest created</option>
+  <option value="priority" {% if ordering == 'priority' %}selected{% endif %}>Priority</option>
+  <option value="escalated" {% if status == 'escalated' %}selected{% endif %}>Escalated</option>
+</select>
     <button type="submit">Filter</button>
   </form>
 </header>
 
 <p class="muted">Auto-refreshes every 15s. <span id="last"></span></p>
+<section style="display:flex; gap:16px; margin:16px 0; flex-wrap:wrap; border:1px solid #ddd; padding:12px; border-radius:8px; background:#fafafa;">
+  <div><strong>Score:</strong> {{ game_state.score }}</div>
+  <div><strong>Replies sent:</strong> {{ game_state.replies_sent }}</div>
+  <div><strong>User replies:</strong> {{ game_state.user_replies_received }}</div>
+  <div><strong>Tickets closed:</strong> {{ game_state.tickets_closed }}</div>
+</section>
 
 <table id="table">
   <thead>
     <tr>
+      <th>Ticket No.</th>
       <th>Title</th>
       <th>Status</th>
       <th>Priority</th>
@@ -164,8 +250,11 @@ tr.critical-row {
   </thead>
   <tbody id="tbody">
     {% for t in tickets %}
-<tr class="{% if t.priority == 0 and t.status|lower == 'open' %}critical-row{% endif %} {% if t.id == selected_ticket_id %}selected-row{% endif %}">
-   <td>
+<tr class="
+  {% if t.priority == 0 and t.status|lower == 'open' %}critical-row{% endif %}
+  {% if selected_ticket.id == t.id %}selected-row{% endif %}
+">   
+<td>
     <strong>INC-{{ t.id|stringformat:"06d" }}</strong>
   </td>
   <td>{{ t.title }}</td>
@@ -174,6 +263,8 @@ tr.critical-row {
     <span class="pill {{ t.status|lower }}">
       {% if t.status == "waiting_user" %}
   WAITING USER
+{% elif t.status == "escalated" %}
+  ESCALATED
 {% else %}
   {{ t.status|upper }}
 {% endif %}
@@ -201,9 +292,14 @@ tr.critical-row {
 
 <td>
   <div style="display:flex; gap:6px; flex-wrap:wrap;">
-    <a href="?selected={{ t.id }}&q={{ q }}&status={{ status }}&category={{ category }}&ordering={{ ordering }}">
-      <button type="button">View</button>
-    </a>
+   <a href="?selected={{ t.id }}&q={{ q }}&status={{ status }}&category={{ category }}&ordering={{ ordering }}">
+  <button
+    type="button"
+    {% if selected_ticket.id == t.id %}style="font-weight:700; border:2px solid #2563eb;"{% endif %}
+  >
+    View
+  </button>
+</a>
 
     <form method="post" action="{% url 'ticket_action' t.id %}" style="display:flex; gap:6px; flex-wrap:wrap;">
       {% csrf_token %}
@@ -222,6 +318,7 @@ tr.critical-row {
 
       <button type="submit" name="action" value="increase_priority">Increase priority</button>
       <button type="submit" name="action" value="decrease_priority">Decrease priority</button>
+      <button type="submit" name="action" value="escalate_2nd_line">Escalate 2nd line</button>
     </form>
   </div>
 </td>
@@ -265,28 +362,35 @@ tr.critical-row {
     <p><strong>Category:</strong> {{ selected_ticket.category|default:"—" }}</p>
     <p><strong>Duplicate:</strong> {{ selected_ticket.is_duplicate|yesno:"Yes,No" }}</p>
 
-<button type="button" onclick="openReplyModal()">
-Reply to user
-</button>
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+  <button type="button" onclick="openReplyModal()">
+    Reply to user
+  </button>
 
-{% if selected_ticket.status == "waiting_user" %}
-  <form method="post" action="{% url 'simulate_user_reply' selected_ticket.id %}" style="margin-top:8px;">
-    {% csrf_token %}
-    <button type="submit">Simulate user reply</button>
-  </form>
-{% endif %}
+  <button type="button" onclick="openNoteModal()">
+    Add internal note
+  </button>
+</div>
+
+
+
 
     <h3>Ticket History</h3>
 
     {% if selected_ticket.events.all %}
       <ul style="padding-left:18px;">
         {% for event in selected_ticket.events.all %}
-          <li class="history-item">
-            <strong>{{ event.get_event_type_display }}</strong>
-            <span class="muted">{{ event.created_at|date:"Y-m-d H:i:s" }}</span>
-            <br>
-            {{ event.message|linebreaksbr }}
-          </li>
+          <li class="history-item
+  {% if event.event_type == 'score' and '!+' in event.message %}score-positive{% endif %}
+  {% if event.event_type == 'score' and '!-' in event.message %}score-negative{% endif %}
+  {% if event.event_type == 'score' %}score-event{% endif %}
+  {% if event.event_type == 'note' %}internal-note-event{% endif %}
+">
+  <strong>{{ event.get_event_type_display }}</strong>
+  <span class="muted">{{ event.created_at|date:"Y-m-d H:i:s" }}</span>
+  <br>
+  {{ event.message|linebreaksbr }}
+</li>
         {% endfor %}
       </ul>
     {% else %}
@@ -314,6 +418,7 @@ Reply to user
         <option value="test_vpn">Ask user to test VPN</option>
         <option value="restart_printer">Ask user to restart printer</option>
         <option value="more_info">Ask user for more information</option>
+        <option value="closing_message">Thanks, closing ticket</option>
       </select>
 
       <label for="customMessage"><strong>Message</strong></label>
@@ -328,16 +433,49 @@ Reply to user
 </div>
 {% endif %}
 
+{% if selected_ticket %}
+<div id="noteModal" class="modal-backdrop">
+  <div class="modal">
+    <h3>Add Internal Note</h3>
+
+    <form method="post" action="{% url 'add_internal_note' selected_ticket.id %}">
+      {% csrf_token %}
+
+      <label for="internalNote"><strong>Note</strong></label>
+      <textarea
+        id="internalNote"
+        name="internal_note"
+        placeholder="Example: Checked VPN status, asked user to test from another docking station..."
+      ></textarea>
+
+      <div class="modal-actions">
+        <button type="button" onclick="closeNoteModal()">Cancel</button>
+        <button type="submit">Save note</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 
 <script>
+  function openNoteModal() {
+  const modal = document.getElementById("noteModal");
+  if (modal) modal.classList.add("open");
+}
+
+function closeNoteModal() {
+  const modal = document.getElementById("noteModal");
+  if (modal) modal.classList.remove("open");
+}
 const replyTemplates = {
   restart_pc: "Hi, please restart your PC and check if the issue is still happening.",
   reconnect_monitor: "Hi, please unplug the monitor power cable for 30 seconds, plug it back in, and check that the display cable is firmly connected.",
   send_screenshot: "Hi, could you please send a screenshot of the error message you are seeing?",
   test_vpn: "Hi, please disconnect from VPN, reconnect again, and test if the issue continues.",
   restart_printer: "Hi, please restart the printer and check whether other users are affected as well.",
-  more_info: "Hi, could you please provide more information about the issue, including when it started and whether it affects only you or multiple users?"
+  more_info: "Hi, could you please provide more information about the issue, including when it started and whether it affects only you or multiple users?",
+  closing_message: "Thanks for the feedback. We will be closing this ticket now. Please create a new ticket if the issue returns."
 };
 
 function openReplyModal() {
@@ -366,20 +504,32 @@ function stamp() {
 }
 
 async function refreshPartial() {
-  // Re-fetch the same paged URL (?page=..., filters, ordering preserved)
-  const res = await fetch(window.location.href, { headers: { "X-Requested-With": "fetch" } });
+  await fetch("{% url 'process_simulated_replies' %}", {
+    headers: { "X-Requested-With": "fetch" }
+  });
+
+  await fetch("{% url 'process_incoming_tickets' %}", {
+    headers: { "X-Requested-With": "fetch" }
+  });
+
+  const res = await fetch(window.location.href, {
+    headers: { "X-Requested-With": "fetch" }
+  });
+
   const html = await res.text();
   const doc = new DOMParser().parseFromString(html, "text/html");
 
-  // Swap table body
   const newTbody = doc.getElementById("tbody");
   const tbody = document.getElementById("tbody");
   if (newTbody && tbody) tbody.innerHTML = newTbody.innerHTML;
 
-  // Swap pager
   const newPager = doc.getElementById("pager");
   const pager = document.getElementById("pager");
   if (newPager && pager) pager.innerHTML = newPager.innerHTML;
+
+  const newDetail = doc.getElementById("ticket-detail");
+  const detail = document.getElementById("ticket-detail");
+  if (newDetail && detail) detail.innerHTML = newDetail.innerHTML;
 
   stamp();
 }
