@@ -29,6 +29,97 @@
   .pill.priority-low    { background:#3b82f6; }            /* blue   */
   .pill.priority-medium { background:#facc15; color:#111; }/* yellow + dark text */
   .pill.priority-high   { background:#f97316; }            /* orange */
+
+  .pill.priority-critical {
+  background: #dc2626;
+  animation: pulse-critical 1s infinite;
+}
+
+tr.critical-row {
+  animation: row-critical-flash 1.2s infinite;
+}
+
+@keyframes pulse-critical {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes row-critical-flash {
+  0% { background-color: #fff; }
+  50% { background-color: #fee2e2; }
+  100% { background-color: #fff; }
+}
+.selected-row {
+  outline: 2px solid #2563eb;
+  background: #eff6ff;
+}
+
+#ticket-detail {
+  margin-top: 32px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafafa;
+}
+
+#ticket-detail h3 {
+  margin-top: 0;
+}
+
+.history-item {
+  border-left: 3px solid #2563eb;
+  padding-left: 10px;
+  margin-bottom: 12px;
+}
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.modal-backdrop.open {
+  display: flex;
+}
+
+.modal {
+  background: white;
+  width: min(600px, 90vw);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+
+.modal h3 {
+  margin-top: 0;
+}
+
+.modal textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 10px;
+  resize: vertical;
+  font-family: system-ui, Arial;
+}
+
+.modal select {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pill.waiting_user {
+  background: #a855f7;
+}
 </style>
 
 
@@ -44,6 +135,7 @@
     <select name="status">
       <option value="">All status</option>
       <option value="open" {% if status == 'open' %}selected{% endif %}>Open</option>
+      <option value="waiting_user" {% if status == 'waiting_user' %}selected{% endif %}>Waiting user</option>
       <option value="closed" {% if status == 'closed' %}selected{% endif %}>Closed</option>
     </select>
     <input type="text" name="category" placeholder="Category (Printer, Network...)" value="{{ category }}">
@@ -67,37 +159,72 @@
       <th>Category</th>
       <th>Duplicate</th>
       <th>Created</th>
+      <th>Actions</th>
     </tr>
   </thead>
   <tbody id="tbody">
     {% for t in tickets %}
-    <tr>
+<tr class="{% if t.priority == 0 and t.status|lower == 'open' %}critical-row{% endif %} {% if t.id == selected_ticket_id %}selected-row{% endif %}">
+   <td>
+    <strong>INC-{{ t.id|stringformat:"06d" }}</strong>
+  </td>
   <td>{{ t.title }}</td>
 
-  <!-- Status pill -->
   <td>
     <span class="pill {{ t.status|lower }}">
-      {{ t.status|upper }}
+      {% if t.status == "waiting_user" %}
+  WAITING USER
+{% else %}
+  {{ t.status|upper }}
+{% endif %}
     </span>
   </td>
 
-  <!-- Priority pill -->
   <td>
-    <span class="pill
-      {% if t.priority == 1 %}priority-high
-      {% elif t.priority == 2 %}priority-medium
-      {% else %}priority-low
-      {% endif %}">
-      {% if t.priority == 1 %}HIGH
-      {% elif t.priority == 2 %}MEDIUM
-      {% else %}LOW
-      {% endif %}
-    </span>
-  </td>
+  <span class="pill
+    {% if t.priority == 0 %}priority-critical
+    {% elif t.priority == 1 %}priority-high
+    {% elif t.priority == 2 %}priority-medium
+    {% else %}priority-low
+    {% endif %}">
+    {% if t.priority == 0 %}CRITICAL
+    {% elif t.priority == 1 %}HIGH
+    {% elif t.priority == 2 %}MEDIUM
+    {% else %}LOW
+    {% endif %}
+  </span>
+</td>
 
   <td>{{ t.category|default:"—" }}</td>
   <td>{{ t.is_duplicate|yesno:"Yes,No" }}</td>
   <td>{{ t.created_at|date:"Y-m-d H:i" }}</td>
+
+<td>
+  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+    <a href="?selected={{ t.id }}&q={{ q }}&status={{ status }}&category={{ category }}&ordering={{ ordering }}">
+      <button type="button">View</button>
+    </a>
+
+    <form method="post" action="{% url 'ticket_action' t.id %}" style="display:flex; gap:6px; flex-wrap:wrap;">
+      {% csrf_token %}
+
+      {% if t.status|lower == "open" %}
+        <button type="submit" name="action" value="close">Close</button>
+      {% elif t.status|lower == "closed" %}
+        <button type="submit" name="action" value="reopen">Reopen</button>
+      {% endif %}
+
+      {% if t.is_duplicate %}
+        <button type="submit" name="action" value="not_duplicate">Not duplicate</button>
+      {% else %}
+        <button type="submit" name="action" value="duplicate">Duplicate</button>
+      {% endif %}
+
+      <button type="submit" name="action" value="increase_priority">Increase priority</button>
+      <button type="submit" name="action" value="decrease_priority">Decrease priority</button>
+    </form>
+  </div>
+</td>
 </tr>
 
     {% endfor %}
@@ -115,9 +242,124 @@
   {% endif %}
 </p>
 
+<section id="ticket-detail" style="margin-top:32px; border:1px solid #ddd; border-radius:8px; padding:16px;">
+  {% if selected_ticket %}
+    
+    <h3>
+  <strong>Ticket No:</strong>
+  INC-{{ selected_ticket.id|stringformat:"06d" }}
+</p>
+</h3>
+
+    <p><strong>Title:</strong> {{ selected_ticket.title }}</p>
+    <p><strong>Description:</strong> {{ selected_ticket.description }}</p>
+    <p>
+  <strong>Status:</strong>
+  {% if selected_ticket.status == "waiting_user" %}
+    Waiting user
+  {% else %}
+    {{ selected_ticket.status|title }}
+  {% endif %}
+</p>
+    <p><strong>Priority:</strong> {{ selected_ticket.priority }}</p>
+    <p><strong>Category:</strong> {{ selected_ticket.category|default:"—" }}</p>
+    <p><strong>Duplicate:</strong> {{ selected_ticket.is_duplicate|yesno:"Yes,No" }}</p>
+
+<button type="button" onclick="openReplyModal()">
+Reply to user
+</button>
+
+{% if selected_ticket.status == "waiting_user" %}
+  <form method="post" action="{% url 'simulate_user_reply' selected_ticket.id %}" style="margin-top:8px;">
+    {% csrf_token %}
+    <button type="submit">Simulate user reply</button>
+  </form>
+{% endif %}
+
+    <h3>Ticket History</h3>
+
+    {% if selected_ticket.events.all %}
+      <ul style="padding-left:18px;">
+        {% for event in selected_ticket.events.all %}
+          <li class="history-item">
+            <strong>{{ event.get_event_type_display }}</strong>
+            <span class="muted">{{ event.created_at|date:"Y-m-d H:i:s" }}</span>
+            <br>
+            {{ event.message|linebreaksbr }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No history yet for this ticket.</p>
+    {% endif %}
+  {% else %}
+    <h3>Selected Ticket</h3>
+    <p class="muted">Select a ticket to view details and history.</p>
+  {% endif %}
+</section>
+
+{% if selected_ticket %}
+<div id="replyModal" class="modal-backdrop">
+  <div class="modal">
+
+    <form method="post" action="{% url 'send_reply' selected_ticket.id %}">
+      {% csrf_token %}
+
+      <label for="replyTemplate"><strong>Choose template</strong></label>
+      <select id="replyTemplate" name="reply_template" onchange="fillReplyTemplate()">
+        <option value="">Custom message</option>
+        <option value="restart_pc">Ask user to restart PC</option>
+        <option value="reconnect_monitor">Ask user to reconnect monitor</option>
+        <option value="send_screenshot">Ask user for screenshot</option>
+        <option value="test_vpn">Ask user to test VPN</option>
+        <option value="restart_printer">Ask user to restart printer</option>
+        <option value="more_info">Ask user for more information</option>
+      </select>
+
+      <label for="customMessage"><strong>Message</strong></label>
+      <textarea id="customMessage" name="custom_message" placeholder="Type a custom reply..."></textarea>
+
+      <div class="modal-actions">
+        <button type="button" onclick="closeReplyModal()">Cancel</button>
+        <button type="submit">Send reply</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 
 
 <script>
+const replyTemplates = {
+  restart_pc: "Hi, please restart your PC and check if the issue is still happening.",
+  reconnect_monitor: "Hi, please unplug the monitor power cable for 30 seconds, plug it back in, and check that the display cable is firmly connected.",
+  send_screenshot: "Hi, could you please send a screenshot of the error message you are seeing?",
+  test_vpn: "Hi, please disconnect from VPN, reconnect again, and test if the issue continues.",
+  restart_printer: "Hi, please restart the printer and check whether other users are affected as well.",
+  more_info: "Hi, could you please provide more information about the issue, including when it started and whether it affects only you or multiple users?"
+};
+
+function openReplyModal() {
+  const modal = document.getElementById("replyModal");
+  if (modal) modal.classList.add("open");
+}
+
+function closeReplyModal() {
+  const modal = document.getElementById("replyModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function fillReplyTemplate() {
+  const select = document.getElementById("replyTemplate");
+  const textarea = document.getElementById("customMessage");
+
+  if (!select || !textarea) return;
+
+  const selected = select.value;
+  textarea.value = replyTemplates[selected] || "";
+}
+
 function stamp() {
   const el = document.getElementById("last");
   if (el) el.textContent = "Last updated " + new Date().toLocaleTimeString();
