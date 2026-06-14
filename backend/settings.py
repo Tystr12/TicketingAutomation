@@ -25,7 +25,12 @@ SECRET_KEY = 'django-insecure-r)x5@ung2p083ya(yaq@aazoqb+l4kc+$f@q^3y)6a6_6=0wzm
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "ticketing-tystrodev.pythonanywhere.com",
+    "tystrodev.pythonanywhere.com",
+    "localhost",
+    "127.0.0.1",
+]
 
 
 # Application definition
