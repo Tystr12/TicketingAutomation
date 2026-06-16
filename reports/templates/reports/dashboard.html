@@ -1067,6 +1067,23 @@ document.addEventListener("pointerdown", async function (event) {
   playSound("click");
 });
 
+// Clicking anywhere on a highlighted/selected ticket row should open the same
+// view as the small "View" button. Use event delegation so it survives
+// partial refreshes.
+document.getElementById('tbody')?.addEventListener('click', function (e) {
+  // Ignore clicks on interactive controls so forms/buttons still work.
+  if (e.target.closest('a, button, input, select, textarea')) return;
+
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+
+  // Find the existing "View" link in this row and navigate to it.
+  const viewAnchor = tr.querySelector('a[href*="?selected="]');
+  if (viewAnchor && viewAnchor.getAttribute('href')) {
+    window.location.href = viewAnchor.getAttribute('href');
+  }
+});
+
 // Initial stamp + refresh every 15s
 // Initial setup
 stamp();
