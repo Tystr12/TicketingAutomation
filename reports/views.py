@@ -62,6 +62,7 @@ def process_incoming_tickets(request):
             "created": False,
             "simulation_running": False,
         })
+
     created_ticket = None
 
     # 25% chance every time this endpoint is called
@@ -72,7 +73,11 @@ def process_incoming_tickets(request):
         "created": created_ticket is not None,
         "ticket_id": created_ticket.id if created_ticket else None,
         "ticket_number": created_ticket.ticket_number if created_ticket else None,
+        "title": created_ticket.title if created_ticket else None,
+        "priority": created_ticket.priority if created_ticket else None,
+        "simulation_running": True,
     })
+
 
 def create_random_ticket():
     ticket_templates = [
@@ -242,15 +247,22 @@ def create_simulated_user_reply(ticket):
     message="Score changed (!+10)\nUser replied to the ticket."
     )
 
+    return {
+        "ticket_id": ticket.id,
+        "ticket_number": ticket.ticket_number,
+        "reply": reply,
+    }
+
 def process_simulated_replies(request):
     game = GameState.get_state()
 
     if not game.simulation_running:
         return JsonResponse({
-            "created": False,
+            "created_replies": 0,
             "simulation_running": False,
+            "replies": [],
         })
-    
+
     now = timezone.now()
 
     tickets_ready = Ticket.objects.filter(
@@ -259,14 +271,17 @@ def process_simulated_replies(request):
         user_reply_due_at__lte=now,
     )
 
-    created_count = 0
+    replies = []
 
     for ticket in tickets_ready:
-        create_simulated_user_reply(ticket)
-        created_count += 1
+        reply_data = create_simulated_user_reply(ticket)
+        if reply_data:
+            replies.append(reply_data)
 
     return JsonResponse({
-        "created_replies": created_count
+        "created_replies": len(replies),
+        "simulation_running": True,
+        "replies": replies,
     })
 
 def dashboard(request):

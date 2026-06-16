@@ -189,19 +189,103 @@ tr.critical-row {
   padding: 8px 10px;
   border-radius: 6px;
 }
+
+#toast-container {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 2000;
+}
+
+.toast {
+  min-width: 260px;
+  max-width: 380px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #111827;
+  color: white;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  font-size: 14px;
+  animation: toast-slide-in 0.2s ease-out;
+}
+
+.toast strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.toast-new-ticket {
+  background: #2563eb;
+}
+
+.toast-user-reply {
+  background: #7c3aed;
+}
+
+.toast-positive {
+  background: #16a34a;
+}
+
+.toast-negative {
+  background: #dc2626;
+}
+
+.toast-clear {
+  background: #0f766e;
+}
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Floating score change indicators */
+.floater {
+  position: fixed;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-weight: 800;
+  color: #fff;
+  font-size: 14px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+  transform: translateY(0);
+  opacity: 1;
+  z-index: 2200;
+}
+.floater.positive { background: #16a34a; }
+.floater.negative { background: #dc2626; }
+
+@keyframes float-up {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(-48px); opacity: 0; }
+}
+@keyframes float-down {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(48px); opacity: 0; }
+}
+.floater.float-up { animation: float-up 1200ms cubic-bezier(.2,.8,.2,1) forwards; }
+.floater.float-down { animation: float-down 1200ms cubic-bezier(.2,.8,.2,1) forwards; }
 </style>
 
 
 </head>
 <body>
+  <div id="toast-container"></div>
 
 <header>
   <h2 style="margin-right:auto">Ticket Dashboard</h2>
   <section style="display:flex; gap:16px; margin:16px 0; flex-wrap:wrap;">
-  <div><strong>Score:</strong> {{ game_state.score }}</div>
-  <div><strong>Replies sent:</strong> {{ game_state.replies_sent }}</div>
-  <div><strong>User replies:</strong> {{ game_state.user_replies_received }}</div>
-  <div><strong>Tickets closed:</strong> {{ game_state.tickets_closed }}</div>
+
   <form method="post" action="{% url 'toggle_simulation' %}">
   {% csrf_token %}
 
@@ -215,6 +299,9 @@ tr.critical-row {
     </button>
   {% endif %}
 </form>
+<button type="button" id="soundToggle" onclick="toggleSound()">
+  Sound: Off
+</button>
 <div>
   <strong>Simulation:</strong>
   {% if game_state.simulation_running %}
@@ -524,14 +611,398 @@ function stamp() {
   if (el) el.textContent = "Last updated " + new Date().toLocaleTimeString();
 }
 
+let soundEnabled = localStorage.getItem("soundEnabled") === "true";
+let audioContext = null;
+let audioUnlocked = false;
+let lastScore = null;
+let queueWasClear = false;
+let pendingSounds = [];
+async function ensureAudioReady() {
+  if (!soundEnabled) return false;
+
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  // listen for state changes to help debug intermittent issues
+  try {
+    audioContext.onstatechange = () => {
+      console.debug('AudioContext statechange ->', audioContext.state);
+      if (audioContext.state === 'running') audioUnlocked = true;
+    };
+  } catch (e) {}
+
+  if (audioContext.state === "suspended") {
+    try {
+      await audioContext.resume();
+    } catch (err) {
+      console.warn("Audio resume failed:", err);
+      return false;
+    }
+  }
+
+  // Play a very short silent/unobtrusive tone to unlock audio on some browsers.
+  try {
+    const osc = audioContext.createOscillator();
+    const g = audioContext.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 220;
+    g.gain.setValueAtTime(0.0001, audioContext.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.01);
+    osc.connect(g);
+    g.connect(audioContext.destination);
+    osc.start();
+    osc.stop(audioContext.currentTime + 0.03);
+  } catch (e) {
+    console.debug('unlock tone failed', e);
+  }
+
+  audioUnlocked = audioContext.state === 'running';
+
+  // If audio just became available, flush any queued sounds.
+  if (audioUnlocked && pendingSounds.length) {
+    try {
+      console.debug('Flushing pending sounds', pendingSounds);
+      pendingSounds.forEach(k => playSoundImmediate(k));
+    } catch (e) {
+      console.debug('flush pending sounds failed', e);
+    }
+    pendingSounds = [];
+  }
+
+  return audioUnlocked;
+}
+function updateSoundButton() {
+  const btn = document.getElementById("soundToggle");
+  if (btn) {
+    btn.textContent = soundEnabled ? "Sound: On" : "Sound: Off";
+  }
+}
+
+async function toggleSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem("soundEnabled", soundEnabled ? "true" : "false");
+
+  updateSoundButton();
+
+  if (soundEnabled) {
+    const ready = await ensureAudioReady();
+
+    if (ready) {
+      playSound("positive");
+      showToast("Sound enabled", "Audio feedback is now active.", "toast-positive");
+    } else {
+      showToast("Sound blocked", "Click the page once and try again.", "toast-negative");
+    }
+  }
+}
+let delayedSubmitInProgress = false;
+
+document.addEventListener("submit", async function (event) {
+  if (delayedSubmitInProgress) return;
+
+  const form = event.target;
+  const submitter = event.submitter;
+
+  if (!submitter) return;
+
+  const actionValue = submitter.value;
+  let soundKind = null;
+
+  if (form.action.includes("/reply/")) {
+    soundKind = "reply_sent";
+  }
+
+  if (actionValue === "close") {
+    soundKind = "close_ticket";
+  }
+
+  if (actionValue === "escalate_2nd_line") {
+    soundKind = "escalate";
+  }
+
+  if (!soundEnabled || !soundKind) return;
+
+  const ready = await ensureAudioReady();
+  if (!ready) return;
+
+  event.preventDefault();
+
+  playSound(soundKind);
+
+  delayedSubmitInProgress = true;
+
+  setTimeout(() => {
+    submitter.click();
+  }, 220);
+});
+
+function playTone(frequency, duration, type = "sine", volume = 0.08) {
+  if (!soundEnabled) return;
+
+  // Lazily create AudioContext if needed.
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  // Function that actually creates oscillator and schedules ramps.
+  function doPlay() {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    oscillator.type = type;
+    oscillator.frequency.value = frequency;
+
+    const now = audioContext.currentTime;
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+
+    oscillator.start(now);
+    oscillator.stop(now + duration + 0.03);
+  }
+
+  // If the context is suspended we must resume it first — resume returns
+  // a promise and browsers may ignore sounds played before resume completes.
+  if (audioContext.state === "running") {
+    try { doPlay(); } catch (err) { console.warn('playTone failed:', err); }
+  } else {
+    audioContext.resume()
+      .then(() => { try { doPlay(); } catch (err) { console.warn('playTone failed after resume:', err); } })
+      .catch(err => { console.warn('Audio resume failed:', err); });
+  }
+}
+
+function playSoundImmediate(kind) {
+  if (!soundEnabled) return;
+
+  if (kind === "new_ticket") {
+    playTone(740, 0.12, "sine", 0.07);
+    setTimeout(() => playTone(980, 0.12, "sine", 0.06), 120);
+    return;
+  }
+
+  if (kind === "user_reply") {
+    playTone(520, 0.10, "triangle", 0.07);
+    setTimeout(() => playTone(660, 0.10, "triangle", 0.06), 100);
+    return;
+  }
+
+  if (kind === "positive") {
+    playTone(660, 0.10, "sine", 0.07);
+    setTimeout(() => playTone(880, 0.12, "sine", 0.07), 110);
+    setTimeout(() => playTone(1100, 0.14, "sine", 0.06), 230);
+    return;
+  }
+
+  if (kind === "negative") {
+    playTone(220, 0.18, "sawtooth", 0.06);
+    setTimeout(() => playTone(160, 0.22, "sawtooth", 0.05), 180);
+    return;
+  }
+
+  if (kind === "clear") {
+    playTone(523, 0.12, "sine", 0.06);
+    setTimeout(() => playTone(659, 0.12, "sine", 0.06), 120);
+    setTimeout(() => playTone(784, 0.20, "sine", 0.06), 250);
+    return;
+  }
+
+  if (kind === "critical") {
+    playTone(880, 0.15, "square", 0.05);
+    setTimeout(() => playTone(880, 0.15, "square", 0.05), 230);
+    return;
+  }
+
+  if (kind === "click") {
+    playTone(900, 0.03, "sine", 0.04);
+    return;
+  }
+}
+
+function playSound(kind) {
+  if (!soundEnabled) return;
+
+  ensureAudioReady().then((ready) => {
+    if (!ready) {
+      console.debug('playSound: audio not ready, queuing', kind);
+      pendingSounds.push(kind);
+      return;
+    }
+
+    playSoundImmediate(kind);
+  }).catch(err => {
+    console.debug('ensureAudioReady failed in playSound', err);
+  });
+}
+
+function showToast(title, message, className = "") {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${className}`;
+  toast.innerHTML = `
+    <strong>${title}</strong>
+    <div>${message}</div>
+  `;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 5000);
+}
+
+function showFloatingScore(text, positive = true) {
+  // Show score changes as toast-style popups in the bottom-right container
+  const container = document.getElementById('toast-container');
+  if (!container) {
+    console.debug('showFloatingScore: no toast container, fallback to console', text);
+    return;
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${positive ? 'toast-positive' : 'toast-negative'}`;
+  toast.innerHTML = `<strong>${text}</strong>`;
+
+  container.appendChild(toast);
+
+  setTimeout(() => { try { toast.remove(); } catch (e) {} }, 1400);
+}
+
+function openReplyModal() {
+  const modal = document.getElementById("replyModal");
+  if (modal) modal.classList.add("open");
+}
+
+function closeReplyModal() {
+  const modal = document.getElementById("replyModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function openNoteModal() {
+  const modal = document.getElementById("noteModal");
+  if (modal) modal.classList.add("open");
+}
+
+function closeNoteModal() {
+  const modal = document.getElementById("noteModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function fillReplyTemplate() {
+  const select = document.getElementById("replyTemplate");
+  const textarea = document.getElementById("customMessage");
+
+  if (!select || !textarea) return;
+
+  const selected = select.value;
+  textarea.value = replyTemplates[selected] || "";
+}
+
+function stamp() {
+  const el = document.getElementById("last");
+  if (el) el.textContent = "Last updated " + new Date().toLocaleTimeString();
+}
+
+function getCurrentScoreFromPage() {
+  const scoreEl = document.querySelector("[data-score]");
+  if (!scoreEl) return null;
+
+  const score = parseInt(scoreEl.dataset.score, 10);
+  return Number.isNaN(score) ? null : score;
+}
+
+function checkScoreChange() {
+  const currentScore = getCurrentScoreFromPage();
+
+  console.debug('checkScoreChange: currentScore, lastScore ->', currentScore, lastScore);
+
+  if (currentScore === null) return;
+
+  if (lastScore === null) {
+    lastScore = currentScore;
+    return;
+  }
+
+  if (currentScore > lastScore) {
+    const diff = currentScore - lastScore;
+    showToast(`+${diff} points`, "Good work!", "toast-positive");
+    playSound("positive");
+    try { showFloatingScore(`+${diff}`, true); } catch (e) {}
+  }
+
+  else if (currentScore < lastScore) {
+    const diff = lastScore - currentScore;
+    showToast(`-${diff} points`, "Penalty applied.", "toast-negative");
+    playSound("negative");
+    try { showFloatingScore(`-${diff}`, false); } catch (e) {}
+  }
+
+  lastScore = currentScore;
+}
+
+function checkQueueClear() {
+  const tbody = document.getElementById("tbody");
+  if (!tbody) return;
+
+  const visibleRows = tbody.querySelectorAll("tr").length;
+  const isClear = visibleRows === 0;
+
+  if (isClear && !queueWasClear) {
+    showToast("Queue clear!", "All active tickets are handled.", "toast-clear");
+    playSound("clear");
+  }
+
+  queueWasClear = isClear;
+}
+
 async function refreshPartial() {
-  await fetch("{% url 'process_simulated_replies' %}", {
+  const repliesResponse = await fetch("{% url 'process_simulated_replies' %}", {
     headers: { "X-Requested-With": "fetch" }
   });
 
-  await fetch("{% url 'process_incoming_tickets' %}", {
+  const repliesData = await repliesResponse.json();
+
+  if (repliesData.replies && repliesData.replies.length > 0) {
+    repliesData.replies.forEach(reply => {
+      showToast(
+        `User replied on ${reply.ticket_number}`,
+        reply.reply,
+        "toast-user-reply"
+      );
+      playSound("user_reply");
+    });
+  }
+
+  const ticketsResponse = await fetch("{% url 'process_incoming_tickets' %}", {
     headers: { "X-Requested-With": "fetch" }
   });
+
+  const ticketData = await ticketsResponse.json();
+
+  if (ticketData.created) {
+    showToast(
+      `New ticket ${ticketData.ticket_number}`,
+      ticketData.title,
+      "toast-new-ticket"
+    );
+
+    if (ticketData.priority === 0) {
+      playSound("critical");
+    } else {
+      playSound("new_ticket");
+    }
+  }
+
+  const oldScore = getCurrentScoreFromPage();
+
+  console.debug('refreshPartial: oldScore before fetch ->', oldScore, 'lastScore=', lastScore);
 
   const res = await fetch(window.location.href, {
     headers: { "X-Requested-With": "fetch" }
@@ -552,12 +1023,59 @@ async function refreshPartial() {
   const detail = document.getElementById("ticket-detail");
   if (newDetail && detail) detail.innerHTML = newDetail.innerHTML;
 
+  const newScorePanel = doc.getElementById("score-panel");
+  const scorePanel = document.getElementById("score-panel");
+  if (newScorePanel && scorePanel) {
+    // Replace inner HTML and also copy the data-score attribute so
+    // getCurrentScoreFromPage() reads the updated value.
+    scorePanel.innerHTML = newScorePanel.innerHTML;
+    try {
+      const newScore = newScorePanel.getAttribute('data-score');
+      if (newScore !== null) {
+        scorePanel.setAttribute('data-score', newScore);
+        // Also update dataset for immediate JS reads
+        scorePanel.dataset.score = newScore;
+      }
+    } catch (e) {
+      console.warn('Failed to copy data-score attribute', e);
+    }
+  }
+
+  console.debug('refreshPartial: new scorePanel.dataset.score ->', scorePanel && scorePanel.dataset && scorePanel.dataset.score);
+
   stamp();
+
+  checkScoreChange();
+  checkQueueClear();
+
 }
 
+document.addEventListener("click", async function () {
+  if (soundEnabled && !audioUnlocked) {
+    await ensureAudioReady();
+  }
+}, { once: true });
+
+document.addEventListener("pointerdown", async function (event) {
+  const clickable = event.target.closest("button, a");
+
+  if (!clickable) return;
+
+  const ready = await ensureAudioReady();
+  if (!ready) return;
+
+  playSound("click");
+});
+
 // Initial stamp + refresh every 15s
+// Initial setup
 stamp();
+updateSoundButton();
+lastScore = getCurrentScoreFromPage();
+checkQueueClear();
+
 setInterval(refreshPartial, 15000);
+
 </script>
 
 
