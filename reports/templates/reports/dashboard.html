@@ -261,6 +261,8 @@ tr.critical-row {
   transform: translateY(0);
   opacity: 1;
   z-index: 2200;
+  bottom: 140px;
+  right: 20px;
 }
 .floater.positive { background: #16a34a; }
 .floater.negative { background: #dc2626; }
@@ -286,7 +288,7 @@ tr.critical-row {
   <h2 style="margin-right:auto">Ticket Dashboard</h2>
   <section style="display:flex; gap:16px; margin:16px 0; flex-wrap:wrap;">
 
-  <form method="post" action="{% url 'toggle_simulation' %}">
+  <form method="post" action="{% url 'toggle_simulation' %}" style="margin:0;">
   {% csrf_token %}
 
   {% if game_state.simulation_running %}
@@ -299,6 +301,28 @@ tr.critical-row {
     </button>
   {% endif %}
 </form>
+
+<form method="post" action="{% url 'set_speed' %}" style="margin:0; display:flex; gap:8px; align-items:center;">
+  {% csrf_token %}
+  <label for="speedSelect" style="font-weight:600;">Speed:</label>
+  <select id="speedSelect" name="speed" style="padding:8px;">
+    <option value="relaxed" {% if game_state.speed == 'relaxed' %}selected{% endif %}>Relaxed</option>
+    <option value="normal" {% if game_state.speed == 'normal' %}selected{% endif %}>Normal</option>
+    <option value="fast" {% if game_state.speed == 'fast' %}selected{% endif %}>Fast</option>
+  </select>
+  <button type="submit" style="background:#f59e0b; color:white; margin:0;">
+    Set speed
+  </button>
+</form>
+
+<button type="button" style="background:#2563eb; color:white; margin:0;" onclick="openResetModal('game')">
+  Reset game
+</button>
+
+<button type="button" style="background:#9333ea; color:white; margin:0;" onclick="openResetModal('tickets')">
+  Reset tickets
+</button>
+
 <button type="button" id="soundToggle" onclick="toggleSound()">
   Sound: Off
 </button>
@@ -311,6 +335,18 @@ tr.critical-row {
   {% endif %}
 </div>
 </section>
+
+{% if reset_action == "game" %}
+  <p style="color:#0f766e; font-weight:600;">Game progress has been reset.</p>
+{% elif reset_action == "tickets" %}
+  <p style="color:#0f766e; font-weight:600;">All tickets and game progress have been reset.</p>
+{% endif %}
+{% if speed_action %}
+  <p style="color:#0f766e; font-weight:600;">Speed set to {{ speed_action|title }}.</p>
+{% endif %}
+{% if reply_evaluation_message %}
+  <div id="replyEvaluationMessage" data-message="{{ reply_evaluation_message }}" data-level="{{ reply_evaluation_level }}"></div>
+{% endif %}
 
   <!-- Search/filter form (GET) -->
   <form class="inline" method="get">
@@ -522,6 +558,11 @@ tr.critical-row {
         <option value="">Custom message</option>
         <option value="restart_pc">Ask user to restart PC</option>
         <option value="reconnect_monitor">Ask user to reconnect monitor</option>
+        <option value="plug_peripheral">Ask user to unplug and replug device</option>
+        <option value="replace_hardware">Ask user for room/floor and arrange hardware replacement</option>
+        <option value="arrange_replacement">Confirm location and arrange replacement</option>
+        <option value="send_password_reset">Send password reset link</option>
+        <option value="unlock_account">Unlock user account</option>
         <option value="send_screenshot">Ask user for screenshot</option>
         <option value="test_vpn">Ask user to test VPN</option>
         <option value="restart_printer">Ask user to restart printer</option>
@@ -565,6 +606,20 @@ tr.critical-row {
 </div>
 {% endif %}
 
+<div id="resetModal" class="modal-backdrop">
+  <div class="modal">
+    <h3 id="resetModalTitle">Confirm reset</h3>
+    <p id="resetModalMessage">Are you sure you want to continue?</p>
+    <form id="resetFormModal" method="post" action="">
+      {% csrf_token %}
+      <div class="modal-actions">
+        <button type="button" onclick="closeResetModal()">Cancel</button>
+        <button type="submit" id="resetConfirmButton">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 
 <script>
   function openNoteModal() {
@@ -576,12 +631,48 @@ function closeNoteModal() {
   const modal = document.getElementById("noteModal");
   if (modal) modal.classList.remove("open");
 }
+
+function openResetModal(type) {
+  const modal = document.getElementById("resetModal");
+  const title = document.getElementById("resetModalTitle");
+  const message = document.getElementById("resetModalMessage");
+  const form = document.getElementById("resetFormModal");
+
+  if (!modal || !title || !message || !form) return;
+
+  if (type === "game") {
+    title.textContent = "Reset game progress";
+    message.textContent = "This will clear score, ticket counts, and stop the simulation.";
+    form.action = "{% url 'reset_game' %}";
+    document.getElementById("resetConfirmButton").textContent = "Reset game";
+  } else if (type === "tickets") {
+    title.textContent = "Reset all tickets";
+    message.textContent = "This will delete every ticket and reset game progress. This cannot be undone.";
+    form.action = "{% url 'reset_tickets' %}";
+    document.getElementById("resetConfirmButton").textContent = "Reset tickets";
+  } else {
+    return;
+  }
+
+  modal.classList.add("open");
+}
+
+function closeResetModal() {
+  const modal = document.getElementById("resetModal");
+  if (modal) modal.classList.remove("open");
+}
+
 const replyTemplates = {
   restart_pc: "Hi, please restart your PC and check if the issue is still happening.",
   reconnect_monitor: "Hi, please unplug the monitor power cable for 30 seconds, plug it back in, and check that the display cable is firmly connected.",
+  plug_peripheral: "Hi, please unplug the peripheral, wait 10 seconds, then plug it back in and verify whether it starts working.",
+  replace_hardware: "Hi, please let me know your location so I can arrange a replacement for the hardware if needed.",
+  arrange_replacement: "Thanks for your location. I'm arranging the hardware replacement and escalating this to our hardware team. They'll contact you shortly to schedule delivery.",
   send_screenshot: "Hi, could you please send a screenshot of the error message you are seeing?",
   test_vpn: "Hi, please disconnect from VPN, reconnect again, and test if the issue continues.",
   restart_printer: "Hi, please restart the printer and check whether other users are affected as well.",
+  send_password_reset: "Hi, I have sent a password reset link to your email. Please follow the link to set a new password.",
+  unlock_account: "Hi, I have unlocked your account. Please try signing in again and let me know if you still see the issue.",
   more_info: "Hi, could you please provide more information about the issue, including when it started and whether it affects only you or multiple users?",
   closing_message: "Thanks for the feedback. We will be closing this ticket now. Please create a new ticket if the issue returns."
 };
@@ -696,46 +787,7 @@ async function toggleSound() {
     }
   }
 }
-let delayedSubmitInProgress = false;
 
-document.addEventListener("submit", async function (event) {
-  if (delayedSubmitInProgress) return;
-
-  const form = event.target;
-  const submitter = event.submitter;
-
-  if (!submitter) return;
-
-  const actionValue = submitter.value;
-  let soundKind = null;
-
-  if (form.action.includes("/reply/")) {
-    soundKind = "reply_sent";
-  }
-
-  if (actionValue === "close") {
-    soundKind = "close_ticket";
-  }
-
-  if (actionValue === "escalate_2nd_line") {
-    soundKind = "escalate";
-  }
-
-  if (!soundEnabled || !soundKind) return;
-
-  const ready = await ensureAudioReady();
-  if (!ready) return;
-
-  event.preventDefault();
-
-  playSound(soundKind);
-
-  delayedSubmitInProgress = true;
-
-  setTimeout(() => {
-    submitter.click();
-  }, 220);
-});
 
 function playTone(frequency, duration, type = "sine", volume = 0.08) {
   if (!soundEnabled) return;
@@ -853,6 +905,21 @@ function showToast(title, message, className = "") {
 
   container.appendChild(toast);
 
+  // Play appropriate sound based on toast type
+  if (soundEnabled) {
+    if (className.includes("positive")) {
+      playSound("positive");
+    } else if (className.includes("negative")) {
+      playSound("negative");
+    } else if (className.includes("user-reply")) {
+      playSound("user_reply");
+    } else if (className.includes("new-ticket")) {
+      playSound("new_ticket");
+    } else if (className.includes("clear")) {
+      playSound("clear");
+    }
+  }
+
   setTimeout(() => {
     toast.remove();
   }, 5000);
@@ -933,14 +1000,12 @@ function checkScoreChange() {
   if (currentScore > lastScore) {
     const diff = currentScore - lastScore;
     showToast(`+${diff} points`, "Good work!", "toast-positive");
-    playSound("positive");
     try { showFloatingScore(`+${diff}`, true); } catch (e) {}
   }
 
   else if (currentScore < lastScore) {
     const diff = lastScore - currentScore;
     showToast(`-${diff} points`, "Penalty applied.", "toast-negative");
-    playSound("negative");
     try { showFloatingScore(`-${diff}`, false); } catch (e) {}
   }
 
@@ -956,7 +1021,6 @@ function checkQueueClear() {
 
   if (isClear && !queueWasClear) {
     showToast("Queue clear!", "All active tickets are handled.", "toast-clear");
-    playSound("clear");
   }
 
   queueWasClear = isClear;
@@ -976,7 +1040,6 @@ async function refreshPartial() {
         reply.reply,
         "toast-user-reply"
       );
-      playSound("user_reply");
     });
   }
 
@@ -992,12 +1055,6 @@ async function refreshPartial() {
       ticketData.title,
       "toast-new-ticket"
     );
-
-    if (ticketData.priority === 0) {
-      playSound("critical");
-    } else {
-      playSound("new_ticket");
-    }
   }
 
   const oldScore = getCurrentScoreFromPage();
@@ -1056,17 +1113,6 @@ document.addEventListener("click", async function () {
   }
 }, { once: true });
 
-document.addEventListener("pointerdown", async function (event) {
-  const clickable = event.target.closest("button, a");
-
-  if (!clickable) return;
-
-  const ready = await ensureAudioReady();
-  if (!ready) return;
-
-  playSound("click");
-});
-
 // Clicking anywhere on a highlighted/selected ticket row should open the same
 // view as the small "View" button. Use event delegation so it survives
 // partial refreshes.
@@ -1090,6 +1136,14 @@ stamp();
 updateSoundButton();
 lastScore = getCurrentScoreFromPage();
 checkQueueClear();
+
+const replyEvaluationEl = document.getElementById('replyEvaluationMessage');
+if (replyEvaluationEl) {
+  const message = replyEvaluationEl.dataset.message;
+  const level = replyEvaluationEl.dataset.level;
+  showToast('Reply evaluation', message, level ? `toast-${level}` : '');
+  replyEvaluationEl.remove();  // Remove so it only shows once
+}
 
 setInterval(refreshPartial, 15000);
 

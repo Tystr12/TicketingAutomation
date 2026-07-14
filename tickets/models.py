@@ -99,6 +99,22 @@ class GameState(models.Model):
 
     simulation_running = models.BooleanField(default=False)
 
+    SPEED_RELAXED = "relaxed"
+    SPEED_NORMAL = "normal"
+    SPEED_FAST = "fast"
+
+    SPEED_CHOICES = [
+        (SPEED_RELAXED, "Relaxed"),
+        (SPEED_NORMAL, "Normal"),
+        (SPEED_FAST, "Fast"),
+    ]
+
+    speed = models.CharField(
+        max_length=16,
+        choices=SPEED_CHOICES,
+        default=SPEED_NORMAL,
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

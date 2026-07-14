@@ -9,6 +9,8 @@ urlpatterns = [
     path("process-replies/", views.process_simulated_replies, name="process_simulated_replies"),
     path("process-incoming-tickets/", views.process_incoming_tickets, name="process_incoming_tickets"),
     path("ticket/<int:ticket_id>/note/", views.add_internal_note, name="add_internal_note"),
-    path("ticket/<int:ticket_id>/note/", views.add_internal_note, name="add_internal_note"),
+    path("set-simulation-speed/", views.set_speed, name="set_speed"),
+    path("reset-game/", views.reset_game, name="reset_game"),
+    path("reset-tickets/", views.reset_tickets, name="reset_tickets"),
     path("toggle-simulation/", views.toggle_simulation, name="toggle_simulation"),
 ]
