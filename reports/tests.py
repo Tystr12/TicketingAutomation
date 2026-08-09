@@ -82,7 +82,7 @@ class DashboardResetTests(TestCase):
             {"reply_template": "closing_message"}
         )
 
-        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}")
+        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}&show_evaluation=1")
         self.assertFalse(ticket.events.filter(event_type="score", message__icontains="Reply evaluation:").exists())
         game.refresh_from_db()
         self.assertEqual(game.replies_sent, 1)
@@ -106,7 +106,7 @@ class DashboardResetTests(TestCase):
             {"custom_message": "Let me know if that fixes it."}
         )
 
-        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}")
+        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}&show_evaluation=1")
         self.assertTrue(ticket.events.filter(event_type="score", message__icontains="Reply evaluation:").exists())
         score_event = ticket.events.filter(event_type="score", message__icontains="Reply evaluation:").first()
         self.assertIn("Neutral", score_event.message)
@@ -132,7 +132,7 @@ class DashboardResetTests(TestCase):
             {"custom_message": "Did you click on the link?"}
         )
 
-        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}")
+        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}&show_evaluation=1")
         score_event = ticket.events.filter(event_type="score", message__icontains="Reply evaluation:").first()
         self.assertIn("Neutral", score_event.message)
         game.refresh_from_db()
@@ -157,7 +157,7 @@ class DashboardResetTests(TestCase):
             {"custom_message": "Does this affect multiple users?"}
         )
 
-        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}")
+        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}&show_evaluation=1")
         score_event = ticket.events.filter(event_type="score", message__icontains="Reply evaluation:").first()
         self.assertIn("Neutral", score_event.message)
         # simulate the user's follow-up reply and assert contents
@@ -188,7 +188,7 @@ class DashboardResetTests(TestCase):
             {"custom_message": "Could you provide more information about the issue?"}
         )
 
-        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}")
+        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}&show_evaluation=1")
         score_event = ticket.events.filter(event_type="score", message__icontains="Reply evaluation:").first()
         self.assertIn("Neutral", score_event.message)
         # simulate the user's follow-up reply and assert contents
@@ -246,7 +246,7 @@ class DashboardResetTests(TestCase):
             {"reply_template": "replace_hardware"}
         )
 
-        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}")
+        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}&show_evaluation=1")
         latest_message = ticket.events.filter(event_type="message_sent").first()
         self.assertIn("room number", latest_message.message)
         self.assertIn("floor", latest_message.message)
@@ -270,7 +270,7 @@ class DashboardResetTests(TestCase):
             {"reply_template": "send_password_reset"}
         )
 
-        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}")
+        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}&show_evaluation=1")
         score_event = ticket.events.filter(event_type="score", message__icontains="Reply evaluation:").first()
         self.assertIn("Good", score_event.message)
         game.refresh_from_db()
@@ -295,7 +295,7 @@ class DashboardResetTests(TestCase):
             {"reply_template": "unlock_account"}
         )
 
-        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}")
+        self.assertRedirects(response, f"/reports/dashboard/?selected={ticket.id}&show_evaluation=1")
         score_event = ticket.events.filter(event_type="score", message__icontains="Reply evaluation:").first()
         self.assertIn("Good", score_event.message)
         game.refresh_from_db()

@@ -1,47 +1,67 @@
-#  Ticketing Automation System
+# Ticketing Automation
 
-A helpdesk-inspired ticket management system designed to simulate how support teams handle incoming issues, prioritize requests, and manage workflows efficiently.
+A Django-based simulation of an IT service desk workflow. The application
+generates support tickets and lets the user prioritize, investigate, respond
+to, escalate, and close incidents through an interactive dashboard.
 
-##  Description
+## Live demo
 
-This project is a backend-focused application built with Django and Django REST Framework. It simulates a real-world helpdesk dashboard where tickets can be created, categorized, prioritized, and managed.
+[Open Ticketing Automation](https://ticketing-tystrodev.pythonanywhere.com/reports/dashboard/?speed=fast)
 
-The goal of the project is to explore how support systems work internally and how automation (including AI) can improve efficiency and reduce manual workload.
+## Features
 
-##  Features
+- Automatic generation of simulated IT incidents
+- Search, filtering, sorting, and ticket categorization
+- Priority and status management
+- Escalation and duplicate handling
+- User replies and internal notes
+- Event history for every ticket
+- Performance score and activity statistics
+- Configurable simulation speed
+- REST API built with Django REST Framework
+- Automated tests for important workflows
 
-- Create and manage support tickets
-- Assign priority levels (Low, Medium, High)
-- Track ticket status (Open, In Progress, Closed)
-- REST API for interacting with tickets
-- Structured backend with scalable architecture
-
-##  Future Improvements (AI Integration)
-
-- Detect duplicate tickets using AI/NLP
-- Suggest automatic ticket categorization
-- Priority prediction based on ticket content
-- Smart recommendations for support agents
-
-##  Tech Stack
+## Technology
 
 - Python
-- Django
-- Django REST Framework
+- Django and Django REST Framework
+- Django ORM and SQLite
+- HTML, CSS, and JavaScript
+- PythonAnywhere
 
-##  What I Learned
+## Local setup
 
-- Designing REST APIs
-- Structuring backend applications
-- Handling data models and relationships
-- Simulating real-world systems
-- Thinking about automation and scalability
+1. Clone the repository:
 
-##  How to Run
+   ```bash
+   git clone https://github.com/Tystr12/TicketingAutomation.git
+   cd TicketingAutomation
+   ```
+
+2. Create and activate a virtual environment.
+
+3. Install the dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Copy `.env.example` to `.env` and replace its development values.
+
+5. Run the migrations and start the development server:
+
+   ```bash
+   python manage.py migrate
+   python manage.py runserver
+   ```
+
+## Tests
 
 ```bash
-git clone https://github.com/Tystr12/TicketingAutomation.git
-cd TicketingAutomation
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
+python manage.py test
+```
+
+## Purpose
+
+This project was developed to explore data modelling, incident history,
+workflow design, and automation in an IT support environment.
